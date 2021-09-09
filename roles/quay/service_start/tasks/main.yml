@@ -1,0 +1,13 @@
+- include_role: {name: corpusops.roles/docker_compose_service}
+  vars:
+    _docker_compose_service:
+      project: "{{quay_compose_project}}"
+      state: "{{quay_started_state}}"
+      working_directory: "{{quay_hostdir}}"
+      stdout: "{{quay_stdout}}"
+      stderr: "{{quay_stderr}}"
+- shell: |-
+    set -ex
+    cd "{{quay_hostdir}}"
+    docker-compose -p {{quay_compose_project}} up -d
+  tags: [quay_restart_services]

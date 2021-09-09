@@ -1,0 +1,22 @@
+- set_fact:
+    quay_host_dirs: |
+        {% set directories = [] %}
+        {% for quay_volume in quay_volumes %}
+        {% set d = quay_volume.split(':')[0] %}
+        {% set _ = directories.append(d) %}
+        {% endfor %}
+        {% set _ = directories.append(quay_data_volume) %}
+        {{ directories | to_json }}
+- file:
+    path: "{{item}}"
+    mode: "0711"
+    state: directory
+  with_items: "{{quay_host_dirs}}"
+- file:
+    state: directory
+    path: "{{quay_versioned_hostdir}}"
+- file:
+    state: link
+    force: true
+    src: "{{quay_versioned_hostdir}}"
+    path: "{{quay_hostdir}}"

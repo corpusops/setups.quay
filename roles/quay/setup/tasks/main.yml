@@ -1,0 +1,11 @@
+---
+- include_role: {name: corpusops.roles/services_virt_docker}
+  tags: [docker_setup]
+- include_role: {name: quay/service_stop}
+  tags: [service, quay_service, quay_service_stop]
+- include_role: {name: quay/configure}
+  tags: [configs, quay_configure]
+- include_role: {name: quay/service_start}
+  tags: [service, quay_service, quay_service_start]
+- include_role: {name: quay/post}
+  tags: [post]

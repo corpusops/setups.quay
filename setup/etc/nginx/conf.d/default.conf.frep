@@ -1,0 +1,82 @@
+# ansible managed
+{{ $v := dict "$" $ }}
+{{ $v := merge $v ( dict "Env"                    .Env) }}
+{{ $v := merge $v ( dict "real_ip_from_recursive" ( .Env.NGINX_REAL_IP_FROM_RECURSIVE | default "on" )                           ) }}
+{{ $v := merge $v ( dict "real_ip_from"           ( .Env.NGINX_REAL_IP_FROM | default "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16" )) }}
+{{ $v := merge $v ( dict "real_ip_header"         ( .Env.NGINX_REAL_IP_HEADER | default "x-forwarded-for" )                      ) }}
+{{ $v := merge $v ( dict "log_level"              ( .Env.NGINX_LOGLEVEL | default "crit" )                                       ) }}
+types_hash_max_size 2048;
+variables_hash_max_size 1024;
+variables_hash_bucket_size 256;
+server_names_hash_bucket_size 256;
+server_names_hash_max_size 1024;
+tcp_nodelay on; client_body_temp_path /tmp/client_body_temp; proxy_temp_path /tmp/proxy_temp; fastcgi_temp_path /tmp/fastcgi_temp; uwsgi_temp_path /tmp/uwsgi_temp; scgi_temp_path /tmp/scgi_temp;
+log_format custom_combined '$best_http_host $real_ip - ' '"$request" $status $body_bytes_sent ' '"$http_referer" "$http_user_agent" ' '$request_time $upstream_response_time $pipe';
+# Obtain best http host
+map $http_host $this_host { default $http_host; '' $host; }
+map $http_x_forwarded_host $best_http_host { default $http_x_forwarded_host; '' $this_host; }
+# activate real_ip logging
+real_ip_header {{ $v.real_ip_header }};
+real_ip_recursive {{ $v.real_ip_from_recursive }};
+{{ range $v.real_ip_from | splitList " " }}
+  set_real_ip_from {{ . }};
+{{ end }}
+# dont log LB heatlhcheck requests
+map $request_method $method_loggable1 {OPTIONS 0;default 1;}
+# dont log internal quay heatlhcheck requests
+map $request_method$uri$http_user_agent $method_loggable2 {"~^GET/curl/" 0; default 1;}
+map $method_loggable1$method_loggable2 $method_loggable {"~0" 0;default 1;}
+map $http_x_forwarded_proto $x_forwarded_proto { default $http_x_forwarded_proto; "" $scheme; }
+map $http_x_forwarded_for $real_ip {
+  default                                     "$remote_addr";
+  "~(?P<ip>^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$)"  "$ip";
+}
+map "$http_x_ssl$http_x_forwarded_proto" $forwarded_ssl_scheme {default $scheme; "~(1|https|ssl)" https;}
+map "$http_x_ssl$http_x_forwarded_proto" $gunicorn_x_forwarded_proto {default $scheme; "~(1|https|ssl)" ssl;}
+geo $banned { default 0; include /nginx/deny.conf; }
+upstream quay   { server quay:8080; }
+upstream config { server quayconfig:8080; }
+{{ define "f2b" }}
+    if ( $banned ~ 1 ) { return 444; }
+{{ end }}
+{{ define "forcessl" }}
+    if ($forwarded_ssl_scheme != "https"){ rewrite ^(.*)$ https://$host$1 permanent; }
+{{ end }}
+{{ define "pass" }}
+    proxy_http_version 1.1;
+    proxy_cookie_path / "/; Secure";
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $real_ip;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $gunicorn_x_forwarded_proto;
+    proxy_buffering off; proxy_request_buffering off;
+    proxy_send_timeout 900; proxy_read_timeout 900;
+{{ end }}
+{{ define "vhost" }}
+  server {
+    listen 80; server_name {{.name}} {{ .alias | default "" }}; server_tokens off;
+    client_max_body_size 0; chunked_transfer_encoding on;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubdomains; preload";
+    access_log /dev/stdout custom_combined if=$method_loggable;
+    error_log  /dev/stdout {{.log_level}};
+    add_header X-Frame-Options DENY;
+    add_header Content-Security-Policy "frame-ancestors 'none'";
+    {{ if has "config" .vhostblocks }}
+    auth_basic "Restricted";auth_basic_user_file /q;
+    {{ end }}
+    {{ template "forcessl"  .}}
+    location ~ ^(/v1/|/service/notifications) { return 404; }
+    location ~ ^(/chartrepo/|/v2/) {
+      proxy_cookie_path / "/; Secure";
+      {{ template "pass"  . }}
+      proxy_pass http://{{.upstream}};
+    }
+    location / {
+      proxy_cookie_path / "/; HttpOnly; Secure";
+      {{ template "pass" . }}
+      proxy_pass http://{{.upstream}};
+    }
+  }
+{{ end }}
+{{ template "vhost" ( $v | merge ( dict "name" .Env.QUAY_DOMAIN        "upstream" "quay"   "vhostblocks" ( list "quay"   ) ) ) }}
+{{ template "vhost" ( $v | merge ( dict "name" .Env.QUAY_CONFIG_DOMAIN "upstream" "config" "vhostblocks" ( list "config" ) ) ) }} 

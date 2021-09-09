@@ -1,0 +1,5 @@
+# to work, needs  https://github.com/goquay/quay/issues/15323 to be merged in
+# - shell: "{{quay_hostdir}}/flushall.sh"
+#   name: "fix redis queue"
+#   tags: [flush]
+- debug: {msg: "disabled for now"}

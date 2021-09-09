@@ -1,0 +1,7 @@
+---
+- include_role: {name: quay/layout}
+  tags: [quay_layout]
+- include_role: {name: quay/configs}
+  tags: [quay_configs]
+- include_role: {name: quay/prepare}
+  tags: [quay_prepare]

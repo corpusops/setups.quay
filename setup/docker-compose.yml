@@ -1,0 +1,199 @@
+---
+# ansible managed
+version: '3.7'
+x-blocks:
+  x-env: &env {env_file: [.env]}
+  x-restart: &restart {restart: "$QUAY_RESTART_POLICY"}
+  x-base: &base { <<: [ *env, *restart ], depends_on: [log] }
+networks: {quay: {driver: bridge, ipam: {driver: default, config: [{subnet: "${QUAY_NETWORK}.0/24"}]}}}
+services:
+  log:
+    <<: [ *base ]
+    depends_on: []
+    image: corpusops/rsyslog
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.241"}}
+    ports: ["127.0.0.1:1514:10514"]
+    # ensure no syslog log loop
+    logging: {driver: "json-file", options: {max-size: "10M", max-file: "50"}}
+    volumes: [logs:/var/log/docker]
+  redis:
+    <<: [ *base ]
+    image: "$REDIS_IMAGE"
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.102"}}
+    volumes: ['redis:/data']
+    command: "redis-server --requirepass ${REDIS_PASSWORD-redis}"
+    logging: {driver: syslog, options: {tag: "redis", syslog-address: "tcp://localhost:1514"}}
+  postgresql:
+    <<: [ *base ]
+    image: "$POSTGRES_IMAGE"
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.103"}}
+    volumes: ["postgresql:/var/lib/postgresql/data"]
+    logging: {driver: syslog, options: {tag: "postgresql", syslog-address: "tcp://localhost:1514"}}
+  setup:
+    <<: [ *base ]
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.104"}}
+    image: "$QUAY_BACKUP_IMAGE"
+    logging: {driver: syslog, options: {tag: "setup", syslog-address: "tcp://localhost:1514"}}
+    depends_on: [postgresql, log]
+    volumes: [helpers:/helpers, logs:/logs,
+              nginx:/nginx, ./common/config/nginx:/etc/nginx]
+    entrypoint:
+    - bash
+    - "-ec"
+    - |-
+      touch /logs/quay.log
+      f=/started_$$(echo $$POSTGRES_DB|sed -re "s![/:]!__!g")
+      hf=/started_hr
+      nf=/nginx/started
+      u="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB"
+      cu="postgres://$$POSTGRES_CLAIR_USER:$$POSTGRES_CLAIR_PASSWORD@$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_CLAIR_DB"
+      rf() { for fl in $$nf $$f $$hf;do if [ -f $$fl ] ;then rm -f $$fl;fi;done; }
+      export PATH=/cops_helpers:/$$PATH
+      rf
+      echo "Try connection to pgsql: $$POSTGRES_DB & wait for db init" >&2
+      ( while true;do if ( echo select 1|psql -v ON_ERROR_STOP=1 $$u; );then touch $$f&&break;fi;done )&
+      echo "Refresh helpers" >&2 && \
+        cp -vf /usr/bin/diff /cops_helpers/* /helpers && touch $$hf
+      set -x
+      dockerize -timeout 300s -wait "file:///$$f"
+      dockerize -timeout 900s -wait "file:///$$hf"
+      set -o pipefail
+      set +x
+      echo "CREATE EXTENSION IF NOT EXISTS pg_trgm"|psql -v ON_ERROR_STOP=1 $$u
+      psql -tc "SELECT 1 FROM pg_user WHERE usename = '$$POSTGRES_CLAIR_USER'" $$u | grep -q 1 \
+      || psql -v ON_ERROR_STOP=1 -c "\
+         CREATE USER $POSTGRES_CLAIR_USER
+         WITH ENCRYPTED PASSWORD '$$POSTGRES_CLAIR_PASSWORD'" $$u
+      psql -tc "SELECT 1 FROM pg_database WHERE datname = '$$POSTGRES_CLAIR_DB'" $$u | grep -q 1 \
+      || psql -v ON_ERROR_STOP=1 -c "\
+         CREATE DATABASE $POSTGRES_CLAIR_DB \
+         WITH OWNER=$$POSTGRES_CLAIR_USER ENCODING=utf8" $$u
+      echo select 1|psql -v ON_ERROR_STOP=1 $$cu|grep -q 1
+      rf
+      while true;do printf "HTTP/1.1 200 OK\nContent-Length: 7\n\nstarted\n"|( nc -l -p 80 || /bin/true);done
+  quay: &quay
+    <<: [ *base ]
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.105"}}
+    image: "$QUAY_IMAGE"
+    logging: {driver: syslog, options: {tag: "quay", syslog-address: "tcp://localhost:1514"}}
+    depends_on: [postgresql, log, setup]
+    command: []
+    user: root
+    entrypoint:
+    - bash
+    - "-ec"
+    - |-
+      export PATH=/helpers:$PATH
+      dockerize -wait http://setup -timeout 300s
+      cfgs="/conf/stack/config.yaml"
+      for i in $$cfgs;do frep --overwrite $${i}.jfrep:$${i};done
+      if [[ -n $${QUAY_CONFIG_MODE-} ]];then
+       exec gosu $$QUAY_SHELL_USER /quay-registry/quay-entrypoint.sh config $$REGISTRY_CONFIG_PASSWORD
+      else
+       # while true;do sleep 1234;done
+       exec gosu $$QUAY_SHELL_USER /quay-registry/quay-entrypoint.sh $$@
+      fi
+    volumes: [helpers:/helpers, ./etc/stack:/conf/stack, quay-storage:/datastorage]
+  quayconfig:
+    <<: [ *quay ]
+    environment: {QUAY_CONFIG_MODE: "1"}
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.106"}}
+    logging: {driver: syslog, options: {tag: "quayconfig", syslog-address: "tcp://localhost:1514"}}
+  nginx:
+    <<: [ *env, *restart ]
+    image: "$QUAY_NGINX_IMAGE"
+    depends_on: [setup]
+    ports:
+    - "${QUAY_PUBLIC_IP:-0.0.0.0}:${QUAY_PUBLIC_PORT:-80}:80"
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.107"}}
+    volumes: [nginx:/nginx, helpers:/helpers, logs:/logs, ./etc/nginx/conf.d:/etc/nginx/conf.d]
+    entrypoint:
+    - /bin/bash
+    - "-exc"
+    - |-
+      export PATH=/helpers:$PATH
+      while ! (dockerize --version; );do echo wdockerize;done
+      dockerize -wait http://setup -timeout 300s
+      #
+      confs="/etc/nginx/conf.d/default.conf.frep"
+      for i in $$confs;do j=$$(echo $$i|sed -re "s/.j?frep//g");frep $${i}:$$j --overwrite;done
+      #
+      sed -i -r \
+        -e "s/(worker_connections ) 1024;/\1 $${NGINX_WORKERS:-3096};/g" \
+        /etc/n*/nginx.conf
+      d=/nginx/deny.conf
+      touch $$d $$d.prev
+      cp $$d $$d.prev
+      echo "$$REGISTRY_CONFIG_PASSWORD"|htpasswd -cbim /q quayconfig
+      ( while true;do set +x;
+          if ! ( diff $$d.prev $$d );then
+            echo "New Banned ip, reloading"
+            cp -vf $$d $$d.prev
+            if [ -f /var/run/nginx.pid ];then
+              kill -HUP `cat /var/run/nginx.pid` || /bin/true
+            fi
+          fi
+          sleep $${F2B_TIMER:-60}
+        done; )&
+      #
+      exec /usr/sbin/nginx -g "daemon off;"
+  backup:
+    <<: [ *base ]
+    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.108"}}
+    image: "$QUAY_BACKUP_IMAGE"
+    logging: {driver: syslog, options: {tag: "backup", syslog-address: "tcp://localhost:1514"}}
+    depends_on: [postgresql, setup, log]
+    volumes: ["dbs:/var/db_smart_backup"]
+    environment:
+      DBNAMES: "$QUAY_DB_NAMES"
+      COMP: "$QUAY_DBS_COMPRESSION"
+      KEEP_LASTS: "$QUAY_KEEP_DUMPS"
+      KEEP_DAYS: "$QUAY_KEEP_DUMPS"
+      KEEP_MONTHES: "0"
+      KEEP_WEEKS: "0"
+#  logrotate:
+#    dns_search: .
+#    depends_on: [proxy]
+#    container_name: logrotate
+#    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.9"}}
+#    image: corpusops/debian-bare
+#    volumes:
+#    - ./fail2ban:/f2b
+#    - logs:/logs
+#    <<: [ *env, *restart ]
+#    entrypoint:
+#    - bash
+#    - "-exc"
+#    - |-
+#      export SUPERVISORD_CONFIGS=cron
+#      for i in /c/*frep;do
+#      frep $$i:/etc/logrotate.d/$$(basename $$i .frep) --overwrite
+#      done
+#      exec supervisord.sh
+#  fail2ban:
+#    dns_search: .
+#    networks: {quay: {ipv4_address: "${QUAY_NETWORK}.12"}}
+#    depends_on: [setup]
+#    container_name: fail2ban
+#    <<: [ *env, *restart ]
+#    image: crazymax/fail2ban:latest
+#    environment:
+#      TZ: "Europe/Paris"
+#      F2B_DB_PURGE_AGE: 30d
+#      F2B_LOG_TARGET: /data/fail2ban.log
+#      F2B_LOG_LEVEL: "${F2B_LOGLEVEL:-INFO}"
+#    volumes:
+#    - ./fail2ban:/data
+#    - nginx:/nginx
+#    - logs:/logs:ro
+volumes:
+  postgresql:
+  redis:
+  nginx:
+  dbs:
+  helpers:
+  logs:
+  quay-config:
+  quay-storage:
+  htpasswd:
+# vim: set ft=sls :

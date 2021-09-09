@@ -1,0 +1,309 @@
+---
+quay_cert_key: "{{quay_data_volume}}/key.pem"
+quay_cert: "{{quay_data_volume}}/cert.pem"
+quay_data_volume: "{{quay_dir_prefix}}/data"
+quay_dir_prefix: /srv/docker/quay
+quay_hostdir: "{{quay_dir_prefix}}/current"
+quay_versioned_hostdir: "{{quay_dir_prefix}}/{{quay_version}}"
+quay_volumes:
+- "{{quay_hostdir}}"
+quay_pre_version: '{{quay_pre_versions[quay_version]|default("{0}.{1}".format(
+  quay_version[:1],
+  (((quay_version[2:]|float)-0.1)|string)))}}'
+quay_version: 3.5.2
+quay_pre_versions: {}
+#   2.3.0: 2.2.9
+quay_image: "quay.io/projectquay/quay:v{{quay_version}}"
+quay_network: 172.34.0
+quay_chart_url: disabled
+quay_domain: quay.foo.net
+quay_config_domain: "{{([(quay_domain.split('.'))[0]+'-config']+((quay_domain.split('.'))[1:]))|join('.')}}"
+quay_github_token: null
+quay_password: xxxtR7487913189781az
+quay_db_password: xxxtR0xN0eQ9oP1tQ2w
+quay_clair_db_user: clair
+quay_clair_db_name: clair
+quay_clair_db_password: "{{quay_db_password}}"
+#
+quay_pg: "13"
+quay_backup_image: corpusops/dbsmartbackup:postgres-{{quay_pg}}
+quay_xforwarded: true
+quay_compose_project: "{{quay_dir_prefix|copsf_basename}}"
+quay_ip: 127.0.0.1
+quay_f2b_ports: "{{quay_public_http_port}},{{quay_public_https_port}}"
+quay_public_http_port: 80
+quay_public_https_port: 443
+quay_http_port: 8080
+quay_hosts: ["{{quay_domain}}"]
+quay_app_service_config_files: []
+quay_db_name: db
+quay_db_host: postgresql
+quay_db_port: 5432
+# do not change this unless you use external database
+quay_db_user: postgres
+quay_compose_files: [docker-compose.yml]
+quay_registry_config_password: xX8zK6oB3xB5dU6i
+quay_dbs_compression: nocomp
+quay_redis_password: "secretuB0aZ6iF7aX5vK1o"
+quay_debug: false
+quay_redis_image: "redis:6"
+quay_postgres_image: "corpusops/postgres:13"
+quay_registry_config_mode: ""
+quay_tags_retentions: 0s, 1d, 1w, 2w, 4w, 5w, 6w, 7w, 8w, 9w, 10w, 11w, 12w, 24w, 36w, 72w, 96w, 120w
+quay_title: Quay
+quay_batch_count: 10
+quay_external_tls_termination: "true"
+quay_feature_invite_only_user_creation: true
+quay_feature_user_creation: true
+quay_browser_api_calls_xhr_only: false
+quay_common_conf: |-
+  {% set qd = (not quay_debug) and '#' or '' %}
+  {{qd}}USERS_DEBUG=1
+  {{qd}}DEBUGLOG=true
+  ALLOW_PULLS_WITHOUT_STRICT_LOGGING: true
+  AVATAR_KIND: local
+  SUPER_USERS: {{quay_super_users|to_json}}
+  DB_CONNECTION_ARGS: {autorollback: true, threadlocals: true}
+  FEATURE_ACI_CONVERSION: false
+  FEATURE_ACTION_LOG_ROTATION: true
+  FEATURE_ANONYMOUS_ACCESS: false
+  FEATURE_APP_REGISTRY: true
+  FEATURE_APP_SPECIFIC_TOKENS: true
+  FEATURE_BITBUCKET_BUILD: false
+  FEATURE_BUILD_SUPPORT: false
+  FEATURE_CHANGE_TAG_EXPIRATION: true
+  FEATURE_DIRECT_LOGIN: true
+  FEATURE_GITHUB_BUILD: false
+  FEATURE_GITHUB_LOGIN: false
+  FEATURE_GITLAB_BUILD: false
+  FEATURE_GOOGLE_LOGIN: false
+  FEATURE_INVITE_ONLY_USER_CREATION: {{"{0}".format(quay_browser_api_calls_xhr_only).lower()}}
+  FEATURE_INVITE_ONLY_USER_CREATION: {{"{0}".format(quay_feature_invite_only_user_creation).lower()}}
+  FEATURE_BLACKLISTED_EMAILS: false
+  FEATURE_NONSUPERUSER_TEAM_SYNCING_SETUP: false
+  FEATURE_PARTIAL_USER_AUTOCOMPLETE: true
+  FEATURE_PROXY_STORAGE: false
+  FEATURE_REPO_MIRROR: true
+  FEATURE_REQUIRE_TEAM_INVITE: false
+  FEATURE_RESTRICTED_V1_PUSH: true
+  FEATURE_SECURITY_NOTIFICATIONS: false
+  FEATURE_SECURITY_SCANNER: false
+  FEATURE_SIGNING: false
+  FEATURE_STORAGE_REPLICATION: false
+  FEATURE_TEAM_SYNCING: true
+  FEATURE_USER_CREATION: {{"{0}".format(quay_feature_user_creation).lower()}}
+  FEATURE_USER_LAST_ACCESSED: true
+  FEATURE_USER_LOG_ACCESS: false
+  FEATURE_USER_METADATA: false
+  FEATURE_USERNAME_CONFIRMATION: false
+  FEATURE_USER_RENAME: true
+  FRESH_LOGIN_TIMEOUT: 10m
+  GITHUB_LOGIN_CONFIG: {}
+  GITHUB_TRIGGER_CONFIG: {}
+  GITLAB_TRIGGER_KIND: {}
+  GPG2_PRIVATE_KEY_FILENAME: signing-private.gpg
+  GPG2_PUBLIC_KEY_FILENAME: signing-public.gpg
+  LDAP_ALLOW_INSECURE_FALLBACK: false
+  LOG_ARCHIVE_LOCATION: default
+  LOGS_MODEL_CONFIG: {}
+  LOGS_MODEL: database
+  REPO_MIRROR_INTERVAL: 30
+  REPO_MIRROR_TLS_VERIFY: true
+  TEAM_RESYNC_STALE_TIME: 30m
+  TESTING: false
+  USE_CDN: false
+  USERFILES_LOCATION: default
+  USER_RECOVERY_TOKEN_LIFETIME: 30m
+  SECURITY_SCANNER_INDEXING_INTERVAL: 30
+  SETUP_COMPLETE: true
+  ACTION_LOG_ARCHIVE_LOCATION: default
+  ACTION_LOG_ARCHIVE_PATH: "{{quay_storage_actionlogs_dir}}"
+  ACTION_LOG_ROTATION_THRESHOLD: 2w
+  CONTACT_INFO: {{quay_contact_info|to_json}}
+
+  ######
+  # auth
+  {{quay_auth_conf}}
+
+  ######
+  # mail
+  {{quay_mail_conf}}
+
+  #########
+  # storage
+  {{quay_storage_conf}}
+quay_storage_conf_common: |-
+  DISTRIBUTED_STORAGE_PREFERENCE: [default]
+  DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS: []
+quay_storage_dir: /datastorage
+quay_storage_actionlogs_dir: "{{quay_storage_dir}}/actionlogs"
+quay_storage_registry_dir:   "{{quay_storage_dir}}/registry"
+quay_storage_conf: |-
+  {{quay_storage_conf_common}}
+  # local directory storage
+  DISTRIBUTED_STORAGE_CONFIG: {default: [LocalStorage, {storage_path: "{{quay_storage_registry_dir}}"}]}
+quay_mail_conf: |-
+  # no mail conf
+  FEATURE_MAILING: false
+quay_auth_conf: |-
+  AUTHENTICATION_TYPE: Database
+quay_preferred_scheme: https
+quay_default_tag_expiration: 4w
+quay_secret_key: 12345678-1234-1234-1234-12345678abcd
+quay_database_secret_key: 12345678-1234-1234-1234-12345678abcd
+quay_bittorrent_filename_pepper: 12345678-1234-1234-1234-12345678abcd
+quay_db_uri: "postgresql://{{quay_db_user}}:{{quay_db_password}}@{{quay_db_host}}:{{quay_db_port}}/{{quay_db_name}}"
+quay_public_ip: 0.0.0.0
+quay_contact_info: []
+quay_super_users_default: [sysadmin, quay]
+quay_super_users: "{{quay_super_users_default}}"
+quay_ignore_validation: "1"
+quay_docker_dot_env: |-
+  # ansible managed
+  IGNORE_VALIDATION={{quay_ignore_validation}}
+
+  QUAY__ENTERPRISE_LOGO_URL={{quay_enterprise_logo_url}}
+  QUAY__BITTORRENT_FILENAME_PEPPER={{quay_bittorrent_filename_pepper}}
+  QUAY__DB_URI={{quay_db_uri}}
+  QUAY__DATABASE_SECRET_KEY={{quay_database_secret_key}}
+  QUAY__SECRET_KEY={{quay_secret_key}}
+  QUAY__DEFAULT_TAG_EXPIRATION={{quay_default_tag_expiration}}
+  QUAY__EXTERNAL_TLS_TERMINATION={{quay_external_tls_termination}}
+  QUAY__PREFERRED_URL_SCHEME={{quay_preferred_scheme}}
+  QUAY__SEARCH_MAX_RESULT_PAGE_COUNT={{quay_batch_count}}
+  QUAY__SEARCH_RESULTS_PER_PAGE={{quay_batch_count}}
+  QUAY__SERVER_HOSTNAME={{quay_domain}}:{{quay_public_https_port}}
+  QUAY__REGISTRY_TITLE={{quay_title}}
+  QUAY__REGISTRY_TITLE_SHORT={{quay_title}}
+  QUAY__TAG_EXPIRATION_OPTIONS={{quay_tags_retentions}}
+  QUAY__REDIS_HOST=redis
+  QUAY__REDIS_PORT=6379
+  QUAY_PUBLIC_IP={{quay_public_ip}}
+  QUAY_PUBLIC_PORT={{quay_public_http_port}}
+  QUAY_NGINX_IMAGE=corpusops/nginx
+  QUAY_CONFIG_DOMAIN={{quay_config_domain}}
+  QUAY_IMAGE={{quay_image}}
+  QUAY_CONFIG_MODE={{quay_registry_config_mode}}
+  QUAY_SHELL_USER=1001
+  REGISTRY_CONFIG_PASSWORD={{quay_registry_config_password}}
+  REDIS_IMAGE={{quay_redis_image}}
+  POSTGRES_IMAGE={{quay_postgres_image}}
+  REDIS_PASSWORD={{quay_redis_password}}
+  REDIS_URL=redis://redis:6379/1
+  QUAY_NETWORK={{quay_network}}
+  NGINX_REAL_IP_FROM={{quay_real_ip_from}}
+  COMPOSE_PROJECT_NAME={{quay_compose_project}}
+  CONTROL_COMPOSE_FILES={{quay_compose_files|join(' ')}}
+  COMPOSE_FILE={{quay_compose_files|join(':')}}
+  DATA_FOLDER=/data
+  DATABASE_URL={{quay_db_uri}}
+  POSTGRES_USER={{quay_db_user}}
+  POSTGRES_PASSWORD={{quay_db_password}}
+  POSTGRES_HOST={{quay_db_host}}
+  POSTGRES_PORT={{quay_db_port}}
+  POSTGRES_DB={{quay_db_name}}
+  POSTGRES_CLAIR_DB={{quay_clair_db_name}}
+  POSTGRES_CLAIR_USER={{quay_clair_db_user}}
+  POSTGRES_CLAIR_PASSWORD={{quay_clair_db_password}}
+  PGPASSWD={{quay_db_password}}
+  PGPASSWORD={{quay_db_password}}
+  QUAY_DBS_COMPRESSION={{quay_dbs_compression}}
+  QUAY_KEEP_DUMPS={{quay_keep_dumps}}
+  QUAY_BACKUP_IMAGE={{quay_backup_image}}
+  QUAY_DB_NAMES=all
+  F2B_LOG_LEVEL={{quay_f2b_loglevel}}
+  LOG_FILE={{quay_log_file}}
+  LOG_LEVEL={{quay_log_level}}
+  F2B_TIMER=30
+  {% if quay_smtp_host %}
+  SMTP_FROM={{quay_smtp_from}}
+  SMTP_TIMEOUT={{quay_smtp_timeout}}
+  SMTP_HOST={{quay_smtp_host}}
+  SMTP_PORT={{quay_smtp_port}}
+  SMTP_SSL={{quay_smtp_ssl}}
+  SMTP_EXPLICIT_TLS={{quay_smtp_explicit_tls}}
+  SMTP_USERNAME={{quay_smtp_username}}
+  SMTP_PASSWORD={{quay_smtp_password}}
+  {% endif %}
+  SMTP_TIMEOUT={{quay_smtp_timeout}}
+  QUAY_INVITE_DRYRUN={{quay_invite_dryrun}}
+  QUAY_INVITE_MAIL_NOTIFY={{quay_invite_mail_notify}}
+  QUAY_RESTART_POLICY={{quay_restart_policy}}
+quay_invite_dryrun: "1"
+quay_invite_mail_notify: "1"
+# https://github.com/quay/jslib/issues/52
+# https://github.com/dani-garcia/quay/issues/1166
+# cannot be set higher globally, only by users by their vault settings, but we should in the future.
+# https://github.com/quay/jslib/issues/52
+quay_sheme: https
+quay_default_is: [quay.org, vector.im]
+quay_real_ip_from: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 {{quay_network}}.0/12"
+quay_keep_dumps: "1"
+quay_restart_policy: unless-stopped
+quay_listen_if: 0.0.0.0
+quay_listen_int_if: 127.0.0.1
+quay_dcompose: docker-compose -p {{quay_compose_project}}
+quay_traefik_extra: ""
+quay_stopped_state: stopped
+quay_started_state: started
+quay_stdout: /dev/null
+quay_stderr: /dev/null
+quay_signups_allowed: True
+quay_smtp_from: ""
+quay_smtp_host: ""
+quay_smtp_port: 465
+quay_smtp_ssl: "true"
+quay_smtp_explicit_tls: "true"
+quay_smtp_username: ""
+quay_smtp_password: ""
+quay_smtp_timeout: 15
+# random 40char+ string
+quay_logs_dir: /var/log/quay
+quay_log_file: "{{quay_logs_dir}}/quay.log"
+quay_log_level: info
+quay_job_workers: 10
+quay_job_retries: 10
+quay_fail2ban_retries: 10
+quay_fail2ban_bantime: 14400
+quay_f2b_loglevel: INFO
+quay_allow_admin_api_ips: []
+quay_rotate_size: 200M
+quay_rotate_count: 50
+# 0 deny, 1 allow
+# quay_allow_admin_api_ips: [x.x.x.x 1]
+quay_db_max_idle_conns: 100
+quay_db_max_open_conns: 900
+quay_f2b_tz: "Europe/Paris"
+quay_force_sync_ssh_user: null
+quay_sync_ssh_user: ""
+quay_sshargs: >-
+  {% set k = hostvars[inventory_hostname].get(
+                'ansible_ssh_private_key_file', '') %}
+  {% if k%}-o IdentityFile={{k}} -o IdentitiesOnly=yes{%endif%}
+  {% if (
+      hostvars[inventory_hostname].ansible_connection|default('ssh')
+     ) not in [ 'smart', 'local'] %}
+  {{ hostvars[inventory_hostname].ssh_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_common_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_extra_args | default('') }}
+  {% endif %}
+  {% if((quay_force_sync_ssh_user) or
+        (quay_sync_ssh_user and (quay_force_sync_ssh_user == True))
+    )%}
+  {% set user = quay_sync_ssh_user or ansible_user or '' %}
+  {% if user %}-l {{user}}{% endif %}
+  {% endif %}
+quay_code_rsync_opts: ["-aAHzv"]
+quay_quayscripts_dc: [docker-compose.yml, docker-compose-dev.yml]
+quay_quayscripts_uid: "0"
+quay_quayscripts_gid: "0"
+quay_quayscripts_dotenv: |-
+  DOCKER_BUILDKIT=1
+  COMPOSE_DOCKER_CLI_BUILD=1
+  BUILDKIT_PROGRESS=plain
+  BUILDKIT_INLINE_CACHE=1
+  USER_UID={{quay_quayscripts_uid}}
+  USER_GID={{quay_quayscripts_gid}}
+  COMPOSE_FILE={{quay_quayscripts_dc|join(":")}}
+  DATA_FOLDER={{quay_data_volume}}/scripts

@@ -1,0 +1,74 @@
+---
+quay_redis_password: 131qsd3f
+quay_admin_mail: "sysadmin+quay@bar.com"
+quay_domain: "registry3.bar.net"
+quay_registry_mail_disabled: "false"
+quay_password: 5465sqdfdsf
+quay_db_password: "qdsfsqdf4secret"
+quay_smtp_error_email: ["sysadmin+registryerror@bar.com"]
+quay_smtp_host: mail.bar.net
+quay_smtp_port: 587
+quay_smtp_username: myuser@bar.com
+quay_smtp_password: "secretsecret"
+quay_smtp_from: "MakinaRegistry <sysadmin+registry@bar.com>"
+quay_secret_key_base: zaeezarzefdza4545456dsq4f56dsq4f56dsq4f564sqd56f4dsq56f4dsq56f
+quay_github_token: ghp_azert
+quay_registry_config_password: dsqfsqdfze
+quay_secret_key: 12345678-12ab-12ab-12ab-123456789014
+quay_database_secret_key: 12345678-12ab-12ab-12ab-123456789013
+quay_super_users_makina: [sysadmin]
+quay_super_users: "{{quay_super_users_makina}}"
+quay_bittorrent_filename_pepper: 12345678-12ab-12ab-12ab-123456789012
+quay_debug: true
+quay_enterprise_logo_url: "http://foo.com/logo.png"
+# quay_auth_conf: |-
+#   AUTHENTICATION_TYPE: LDAP
+#   LDAP_ADMIN_DN: "uid=quayuser,ou=People,dc=bar,dc=org"
+#   LDAP_ADMIN_PASSWD: "baaa"
+#   LDAP_BASE_DN: [dc=bar, dc=org]
+#   LDAP_EMAIL_ATTR: shortMail
+#   LDAP_UID_ATTR: uid
+#   LDAP_URI: "ldap://ldap.bar.net"
+#   LDAP_USER_FILTER: "(|(memberOf=cn=makina,ou=Group,dc=bar,dc=org)(cn=makina-people,ou=Group,dc=bar,dc=org))"
+#   LDAP_USER_RDN: [ou=People]
+#   # LDAP_USER_RDN: [ou=People, dc=bar, dc=org]
+quay_mail_conf: |-
+  MAIL_PORT: 25
+  MAIL_SERVER: mail.bar.net
+  MAIL_USE_AUTH: true
+  MAIL_USE_TLS: true
+  MAIL_USERNAME: myuser@bar.com
+  MAIL_PASSWORD: "secret"
+  MAIL_DEFAULT_SENDER: "sysadmin+quay@bar.com"
+  FEATURE_MAILING: true
+quay_contact_info: ["https://bar.com", "mailto:sysadmin+registrycontact@bar.com"]
+quay_storage_conf: |-
+  {{quay_storage_conf_common}}
+  # local directory storage
+  DISTRIBUTED_STORAGE_CONFIG:
+    # https://github.com/quay/quay/blob/master/storage/swift.py
+    default:
+    - S3Storage
+    - host: s3.gra.cloud.ovh.net
+      port: "443"
+      s3_bucket: registry
+      s3_access_key: xxx
+      s3_secret_key: yyy
+      storage_path: "{{quay_storage_registry_dir}}"
+    # - SwiftStorage
+    # - swift_user: "user-xxx"
+    #   storage_path: "{{quay_storage_registry_dir}}"
+    #   swift_password: "zzz"
+    #   swift_container: "registry"
+    #   auth_url: "https://auth.cloud.ovh.net/v3/"
+    #   auth_version: 3
+    #   os_options:
+    #     project_id: 7essss
+    #     # openstack project list gives id/name
+    #     project_name: aaa
+    #     region_name: GRA
+    #     project_domain_name: Default
+    #     user_domain_name: Default
+    #     tenant_id: $project_id_value
+
+ap qu 1.2.3.4

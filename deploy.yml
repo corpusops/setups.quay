@@ -1,0 +1,4 @@
+---
+- hosts: "{{quay_servers|default('quay_servers')}}"
+  roles:
+  - {name: quay/setup, tags: [setup]}

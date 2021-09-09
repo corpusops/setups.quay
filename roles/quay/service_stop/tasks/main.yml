@@ -1,0 +1,15 @@
+- include_role: {name: corpusops.roles/docker_compose_service}
+  vars:
+    _docker_compose_service:
+      project: "{{quay_compose_project}}"
+      state: "{{quay_stopped_state}}"
+      working_directory: "{{quay_hostdir}}"
+      stdout: "{{quay_stdout}}"
+      stderr: "{{quay_stderr}}"
+  tags: [service_stop]
+- shell: |-
+    set -ex
+    if [ ! -e "{{quay_hostdir}}/{{quay_compose_files[0]}}" ];then exit 0;fi
+    cd {{quay_hostdir}}
+    docker-compose down
+  tags: [service_dockercompose_stop]
