@@ -28,7 +28,7 @@ if [ -e "$out" ];then vv rm -rf "$out";fi
 vv cookiecutter --no-input -o "$out" -f "$u" \
     name="quayscripts" \
     author="kiorky" \
-    email="kiorky@cryptelium.net" \
+    email="freesoftware@makina-corpus.com" \
     git_ns="corpusops" \
     lname="quayscripts" \
     eggname="quayscripts" \
